@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: spss-syntax-generator
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn backend_app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
