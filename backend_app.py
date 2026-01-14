@@ -499,8 +499,34 @@ MRSETS
                     first_var = variables[0]
                     unique_vals = set(self.df[first_var].dropna().unique())
                     if unique_vals.issubset({0, 1, 2, 0.0, 1.0, 2.0}):
+                        # Najít i vlastní options z dotazníku (např. QA3__1 = "Žádné z uvedených")
+                        # Pattern: Q{code}__{number} (jednoduchá baterie, ne filtrovaná)
+                        own_options = []
+                        for col in self.df.columns:
+                            # Hledat Q{code}__{num} kde není další podtržítko (není to filtrovaná)
+                            pattern = f'^Q{code}__\\d+$'
+                            if re.match(pattern, col):
+                                # Zkontrolovat že má dichotomické hodnoty
+                                col_vals = set(self.df[col].dropna().unique())
+                                if col_vals.issubset({0, 1, 2, 0.0, 1.0, 2.0}):
+                                    own_options.append(col)
+                        
+                        # Seřadit vlastní options
+                        own_options = sorted(own_options, key=lambda x: int(re.search(r'__(\d+)', x).group(1)) if re.search(r'__(\d+)', x) else 0)
+                        
+                        # Přidat labely pro vlastní options
+                        if own_options:
+                            section.append(f"* Vlastní options pro {code}:")
+                            for i, var in enumerate(own_options):
+                                if i < len(q_info.get('options', [])):
+                                    option_text = q_info['options'][i]
+                                    section.append(f'VAR LAB {var} "{option_text}".')
+                            section.append("EXECUTE.")
+                        
                         # Je to dichotomická MR, vytvořit MDGROUP
-                        var_list = ' '.join(sorted_vars)
+                        # Kombinovat filtrované + vlastní options
+                        all_vars = sorted_vars + own_options
+                        var_list = ' '.join(all_vars)
                         mrset_name = f"${code.lower()}"
                         mrsets_cmd = f"""
 * Vytvoření MR setu pro {code}.
