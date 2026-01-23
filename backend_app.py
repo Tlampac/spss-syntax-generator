@@ -180,6 +180,34 @@ class SPSSSyntaxGenerator:
             return parts[-1].strip()
         return label
     
+    def _extract_item_description_from_label(self, var_name: str) -> str:
+        """
+        Extrahuje popisný text položky z labelu (pro multi-level otázky typu CA11_CA8a1).
+        Např. z labelu:
+          "CA11_CA8a2 - Kde jste se...\n\nPřímá finanční odměna...\n\n Z reklamy"
+        extrahuje: "Přímá finanční odměna..."
+        """
+        if not var_name or var_name not in self.meta.column_names_to_labels:
+            return ""
+        
+        label = self.meta.column_names_to_labels[var_name]
+        
+        # Rozdělíme podle \n\n (dvojitý newline)
+        parts = label.split('\n\n')
+        
+        # Pokud máme 3+ části, prostřední je popisný text
+        # Část 0: "CA11_CA8a2 - Kde jste se..."
+        # Část 1: "Přímá finanční odměna..."  ← TOHLE CHCEME
+        # Část 2: " Z reklamy"
+        if len(parts) >= 3:
+            desc = parts[1].strip()
+            # Omezíme délku
+            if len(desc) > 60:
+                desc = desc[:57] + "..."
+            return desc
+        
+        return ""
+    
     def generate_syntax(self) -> str:
         """Hlavní metoda pro generování syntax - UPGRADED"""
         print("\n🔧 Generuji SPSS syntax (UPGRADED)...")
@@ -253,7 +281,12 @@ class SPSSSyntaxGenerator:
             if not vars_list:
                 continue
             
+            # Extrahovat item description z labelu pokud existuje (pro multi-level otázky typu CA11_CA8a1)
+            item_description = self._extract_item_description_from_label(vars_list[0] if vars_list else None)
+            
             section.append(f"* {code} - {mr_q['text'][:80]}...")
+            if item_description:
+                section.append(f"* {item_description}")  # S HVĚZDIČKOU!
             section.append(f"* Úprava labelů na názvy jednotlivých položek.")
             
             for i, item_text in enumerate(mr_q['items'], 1):
