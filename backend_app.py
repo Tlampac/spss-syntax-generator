@@ -34,16 +34,21 @@ def parse_questionnaire_from_docx(docx_path: str) -> Dict:
         # Buď má otázku (? nebo :), nebo následuje "Vyberte typ otázky::"
         if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', text):
             has_question_mark = ('?' in text or ':' in text)
-            # Podíváme se dopředu, jestli následuje typ otázky
-            next_has_type = False
-            for j in range(i+1, min(i+20, len(doc.paragraphs))):
-                next_text = doc.paragraphs[j].text.strip()
-                if 'Vyberte typ otázky::' in next_text:
-                    next_has_type = True
-                    break
-                # Pokud narazíme na další otázku, přestaneme hledat
-                if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', next_text):
-                    break
+            
+            # Pokud už má otazník/dvojtečku, nemusíme hledat dopředu
+            if has_question_mark:
+                next_has_type = False
+            else:
+                # Pouze pokud NEMÁ otazník, podíváme se dopředu (optimalizace)
+                next_has_type = False
+                for j in range(i+1, min(i+20, len(doc.paragraphs))):
+                    next_text = doc.paragraphs[j].text.strip()
+                    if 'Vyberte typ otázky::' in next_text:
+                        next_has_type = True
+                        break
+                    # Pokud narazíme na další otázku, přestaneme hledat
+                    if next_text and re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', next_text):
+                        break
             
             if has_question_mark or next_has_type:
                 # Uložit předchozí otázku
@@ -480,7 +485,13 @@ import os
 import tempfile
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 @app.route('/api/generate', methods=['POST'])
 def generate_syntax():
