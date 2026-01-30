@@ -30,21 +30,34 @@ def parse_questionnaire_from_docx(docx_path: str) -> Dict:
             i += 1
             continue
         
-        # Detekce nové otázky - kód s tečkou a otázka
-        if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', text) and ('?' in text or ':' in text):
-            # Uložit předchozí otázku
-            if current_q:
-                questions.append(current_q)
+        # Detekce nové otázky - kód s tečkou
+        # Buď má otázku (? nebo :), nebo následuje "Vyberte typ otázky::"
+        if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', text):
+            has_question_mark = ('?' in text or ':' in text)
+            # Podíváme se dopředu, jestli následuje typ otázky
+            next_has_type = False
+            for j in range(i+1, min(i+20, len(doc.paragraphs))):
+                next_text = doc.paragraphs[j].text.strip()
+                if 'Vyberte typ otázky::' in next_text:
+                    next_has_type = True
+                    break
+                # Pokud narazíme na další otázku, přestaneme hledat
+                if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', next_text):
+                    break
             
-            code = text.split('.')[0].strip()
-            current_q = {
-                'code': code,
-                'text': text,
-                'type': None,
-                'items': [],
-                'scales': []
-            }
-            collecting_items = True
+            if has_question_mark or next_has_type:
+                # Uložit předchozí otázku
+                if current_q:
+                    questions.append(current_q)
+                
+                code = text.split('.')[0].strip()
+                current_q = {
+                    'code': code,
+                    'text': text,
+                    'type': None,
+                    'items': []
+                }
+                collecting_items = True
         
         # Detekce typu otázky
         elif 'Vyberte typ otázky::' in text:
@@ -73,26 +86,7 @@ def parse_questionnaire_from_docx(docx_path: str) -> Dict:
     if current_q:
         questions.append(current_q)
     
-    # Rozdělit položky a stupnice u baterií
-    for q in questions:
-        if q['type'] == 'BATERIE OTÁZEK - JEDNA MOŽNÁ ODPOVĚĎ':
-            all_items = q['items']
-            potential_scales = []
-            potential_items = []
-            
-            for item in all_items:
-                if len(item) < 30 and (
-                    any(word in item.lower() for word in ['ano', 'ne', 'rozhodně', 'celkem', 'spíše', 'vůbec', 'moc'])
-                ):
-                    potential_scales.append(item)
-                else:
-                    potential_items.append(item)
-            
-            if 2 <= len(potential_scales) <= 6:
-                q['items'] = potential_items
-                q['scales'] = potential_scales
-    
-    # Kategorizace otázek
+    # Kategorizace otázek - BEZ rozdělování na items/scales
     multiple_response = []
     batteries = []
     filtered_multiple = []
@@ -229,7 +223,7 @@ class SPSSSyntaxGenerator:
             if not vars_list:
                 continue
             
-            section.append(f"* {code} - {battery['text'][:80]}...")
+            section.append(f"* {code} - {battery['text'][:80]}...".)
             for i, item_text in enumerate(battery['items'], 1):
                 var_name = f'Q{code}__{i}'
                 if var_name in vars_list:
@@ -259,7 +253,7 @@ class SPSSSyntaxGenerator:
             if len(question_text) > 200:
                 question_text = question_text[:197] + "..."
             
-            section.append(f"* {code} - {question_text}")
+            section.append(f"* {code} - {question_text}.")
             section.append(f"* Úprava labelů na názvy jednotlivých položek.")
             
             for i, item_text in enumerate(mr_q['items'], 1):
@@ -291,8 +285,8 @@ class SPSSSyntaxGenerator:
             if not parent:
                 continue
             
-            section.append(f"* {code} - {mr_q['text'][:80]}...")
-            section.append(f"* Používá odpovědi z {parent['code']}")
+            section.append(f"* {code} - {mr_q['text'][:80]}...".)
+            section.append(f"* Používá odpovědi z {parent['code']}.")
             
             # Použijeme položky z rodiče
             for i, item_text in enumerate(parent['items'], 1):
@@ -329,8 +323,8 @@ class SPSSSyntaxGenerator:
             if not parent:
                 continue
             
-            section.append(f"* {code} - {battery['text'][:80]}...")
-            section.append(f"* Položky jsou filtrovány z {parent['code']}")
+            section.append(f"* {code} - {battery['text'][:80]}...".)
+            section.append(f"* Položky jsou filtrovány z {parent['code']}.")
             
             for i, item_text in enumerate(parent['items'], 1):
                 var_name = f'Q{code}__{parent["code"]}_{i}'
@@ -360,8 +354,8 @@ class SPSSSyntaxGenerator:
             if not parent:
                 continue
             
-            section.append(f"* {code} - {battery['text'][:80]}...")
-            section.append(f"* Baterie multiple filtrovaná z {parent['code']}")
+            section.append(f"* {code} - {battery['text'][:80]}...".)
+            section.append(f"* Baterie multiple filtrovaná z {parent['code']}.")
             
             # Extrahujeme unique row identifiers
             rows = set()
@@ -401,8 +395,14 @@ class SPSSSyntaxGenerator:
             if not vars_list:
                 continue
             
-            # Určíme VALUE
-            sample_var = vars_list[0]
+            # DŮLEŽITÉ: Vyfiltrovat JEN numerické proměnné (stringové jako _jina NEPATŘÍ do MDGROUP)
+            numeric_vars = [v for v in vars_list if v in self.df.columns and self.df[v].dtype in ['int64', 'float64']]
+            
+            if not numeric_vars:
+                continue
+            
+            # Určíme VALUE z první numerické proměnné
+            sample_var = numeric_vars[0]
             value_to_use = 2
             if sample_var in self.meta.variable_value_labels:
                 val_labels = self.meta.variable_value_labels[sample_var]
@@ -411,7 +411,7 @@ class SPSSSyntaxGenerator:
                         value_to_use = val
                         break
             
-            vars_string = ' '.join(vars_list)
+            vars_string = ' '.join(numeric_vars)
             section.append(f"* Vytvoření MR setu pro {code}.")
             section.append(f"MRSETS")
             section.append(f"  /MDGROUP NAME=${code.lower()} CATEGORYLABELS=VARLABELS ")
@@ -427,15 +427,21 @@ class SPSSSyntaxGenerator:
             if not vars_list:
                 continue
             
+            # DŮLEŽITÉ: Vyfiltrovat JEN numerické proměnné
+            numeric_vars = [v for v in vars_list if v in self.df.columns and self.df[v].dtype in ['int64', 'float64']]
+            
+            if not numeric_vars:
+                continue
+            
             value_to_use = 2
-            if vars_list and vars_list[0] in self.meta.variable_value_labels:
-                val_labels = self.meta.variable_value_labels[vars_list[0]]
+            if numeric_vars and numeric_vars[0] in self.meta.variable_value_labels:
+                val_labels = self.meta.variable_value_labels[numeric_vars[0]]
                 for val, label in val_labels.items():
                     if 'ano' in label.lower():
                         value_to_use = val
                         break
             
-            vars_string = ' '.join(vars_list)
+            vars_string = ' '.join(numeric_vars)
             section.append(f"* Vytvoření MR setu pro {code}.")
             section.append(f"MRSETS")
             section.append(f"  /MDGROUP NAME=${code.lower()} CATEGORYLABELS=VARLABELS ")
