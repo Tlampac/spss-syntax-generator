@@ -223,7 +223,7 @@ class SPSSSyntaxGenerator:
             if not vars_list:
                 continue
             
-            section.append(f"* {code} - {battery['text'][:80]}...".)
+            section.append(f"* {code} - {battery['text'][:80]}...")
             for i, item_text in enumerate(battery['items'], 1):
                 var_name = f'Q{code}__{i}'
                 if var_name in vars_list:
@@ -285,7 +285,7 @@ class SPSSSyntaxGenerator:
             if not parent:
                 continue
             
-            section.append(f"* {code} - {mr_q['text'][:80]}...".)
+            section.append(f"* {code} - {mr_q['text'][:80]}...")
             section.append(f"* Používá odpovědi z {parent['code']}.")
             
             # Použijeme položky z rodiče
@@ -323,7 +323,7 @@ class SPSSSyntaxGenerator:
             if not parent:
                 continue
             
-            section.append(f"* {code} - {battery['text'][:80]}...".)
+            section.append(f"* {code} - {battery['text'][:80]}...")
             section.append(f"* Položky jsou filtrovány z {parent['code']}.")
             
             for i, item_text in enumerate(parent['items'], 1):
@@ -354,7 +354,7 @@ class SPSSSyntaxGenerator:
             if not parent:
                 continue
             
-            section.append(f"* {code} - {battery['text'][:80]}...".)
+            section.append(f"* {code} - {battery['text'][:80]}...")
             section.append(f"* Baterie multiple filtrovaná z {parent['code']}.")
             
             # Extrahujeme unique row identifiers
