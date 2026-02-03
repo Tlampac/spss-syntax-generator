@@ -534,14 +534,18 @@ def generate_syntax():
             generator = SPSSSyntaxGenerator(sav_path, docx_path)
             generator.run(output_path)
             
-            # Vytvoříme response s explicitním Content-Disposition headerem
-            from flask import make_response
+            # Použijeme send_file pro správné kódování, ale přidáme vlastní header
+            from flask import send_file as flask_send_file, make_response
             
-            with open(output_path, 'r', encoding='cp1250') as f:
-                content = f.read()
+            # Pošleme soubor
+            response = flask_send_file(
+                output_path,
+                mimetype='text/plain',
+                as_attachment=True,
+                download_name=output_filename
+            )
             
-            response = make_response(content)
-            response.headers['Content-Type'] = 'text/plain; charset=cp1250'
+            # Explicitně přidáme Content-Disposition header (send_file to dělá taky, ale pro jistotu)
             response.headers['Content-Disposition'] = f'attachment; filename="{output_filename}"'
             
             print(f"DEBUG: Sending file with Content-Disposition: attachment; filename=\"{output_filename}\"")
