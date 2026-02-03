@@ -503,6 +503,16 @@ def generate_syntax():
         sav_file = request.files['sav_file']
         docx_file = request.files['docx_file']
         
+        # Získáme název SAV souboru bez přípony
+        sav_filename = sav_file.filename
+        if sav_filename.lower().endswith('.sav'):
+            base_name = sav_filename[:-4]  # Odstraníme .sav
+        else:
+            base_name = sav_filename
+        
+        # Vytvoříme název pro výstupní soubor
+        output_filename = f'{base_name}_syntax.sps'
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             sav_path = os.path.join(tmpdir, 'data.sav')
             docx_path = os.path.join(tmpdir, 'questionnaire.docx')
@@ -518,7 +528,7 @@ def generate_syntax():
                 output_path,
                 mimetype='text/plain',
                 as_attachment=True,
-                download_name='generated_syntax.sps'
+                download_name=output_filename
             )
     
     except Exception as e:
