@@ -505,13 +505,22 @@ def generate_syntax():
         
         # Získáme název SAV souboru bez přípony
         sav_filename = sav_file.filename
-        if sav_filename.lower().endswith('.sav'):
+        print(f"DEBUG: Original SAV filename: '{sav_filename}'")
+        
+        if sav_filename and sav_filename.lower().endswith('.sav'):
             base_name = sav_filename[:-4]  # Odstraníme .sav
-        else:
+        elif sav_filename:
             base_name = sav_filename
+        else:
+            base_name = 'data'  # Fallback
+        
+        # Ošetříme problematické znaky
+        # Nahradíme mezery, české znaky zůstanou
+        base_name = base_name.replace(' ', '_')
         
         # Vytvoříme název pro výstupní soubor
         output_filename = f'{base_name}_syntax.sps'
+        print(f"DEBUG: Output filename: '{output_filename}'")
         
         with tempfile.TemporaryDirectory() as tmpdir:
             sav_path = os.path.join(tmpdir, 'data.sav')
