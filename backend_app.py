@@ -555,7 +555,7 @@ def generate_syntax():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'version': '2.0-upgraded'})
+    return jsonify({'status': 'ok', 'version': '2.1-filename-fix'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
