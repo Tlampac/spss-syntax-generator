@@ -489,7 +489,8 @@ CORS(app, resources={
     r"/api/*": {
         "origins": "*",
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "allow_headers": ["Content-Type"],
+        "expose_headers": ["Content-Disposition"]  # Povolí JavaScript číst tento header
     }
 })
 
