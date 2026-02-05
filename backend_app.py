@@ -30,39 +30,21 @@ def parse_questionnaire_from_docx(docx_path: str) -> Dict:
             i += 1
             continue
         
-        # Detekce nové otázky - kód s tečkou
-        # Buď má otázku (? nebo :), nebo následuje "Vyberte typ otázky::"
-        if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', text):
-            has_question_mark = ('?' in text or ':' in text)
+        # Detekce nové otázky - kód s tečkou a otázka
+        if re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', text) and ('?' in text or ':' in text):
+            # Uložit předchozí otázku
+            if current_q:
+                questions.append(current_q)
             
-            # Pokud už má otazník/dvojtečku, nemusíme hledat dopředu
-            if has_question_mark:
-                next_has_type = False
-            else:
-                # Pouze pokud NEMÁ otazník, podíváme se dopředu (optimalizace)
-                next_has_type = False
-                for j in range(i+1, min(i+20, len(doc.paragraphs))):
-                    next_text = doc.paragraphs[j].text.strip()
-                    if 'Vyberte typ otázky::' in next_text:
-                        next_has_type = True
-                        break
-                    # Pokud narazíme na další otázku, přestaneme hledat
-                    if next_text and re.match(r'^[A-Z0-9][A-Za-z0-9_]*\.', next_text):
-                        break
-            
-            if has_question_mark or next_has_type:
-                # Uložit předchozí otázku
-                if current_q:
-                    questions.append(current_q)
-                
-                code = text.split('.')[0].strip()
-                current_q = {
-                    'code': code,
-                    'text': text,
-                    'type': None,
-                    'items': []
-                }
-                collecting_items = True
+            code = text.split('.')[0].strip()
+            current_q = {
+                'code': code,
+                'text': text,
+                'type': None,
+                'items': [],
+                'scales': []
+            }
+            collecting_items = True
         
         # Detekce typu otázky
         elif 'Vyberte typ otázky::' in text:
@@ -91,7 +73,26 @@ def parse_questionnaire_from_docx(docx_path: str) -> Dict:
     if current_q:
         questions.append(current_q)
     
-    # Kategorizace otázek - BEZ rozdělování na items/scales
+    # Rozdělit položky a stupnice u baterií
+    for q in questions:
+        if q['type'] == 'BATERIE OTÁZEK - JEDNA MOŽNÁ ODPOVĚĎ':
+            all_items = q['items']
+            potential_scales = []
+            potential_items = []
+            
+            for item in all_items:
+                if len(item) < 30 and (
+                    any(word in item.lower() for word in ['ano', 'ne', 'rozhodně', 'celkem', 'spíše', 'vůbec', 'moc'])
+                ):
+                    potential_scales.append(item)
+                else:
+                    potential_items.append(item)
+            
+            if 2 <= len(potential_scales) <= 6:
+                q['items'] = potential_items
+                q['scales'] = potential_scales
+    
+    # Kategorizace otázek
     multiple_response = []
     batteries = []
     filtered_multiple = []
@@ -258,7 +259,7 @@ class SPSSSyntaxGenerator:
             if len(question_text) > 200:
                 question_text = question_text[:197] + "..."
             
-            section.append(f"* {code} - {question_text}.")
+            section.append(f"* {code} - {question_text}")
             section.append(f"* Úprava labelů na názvy jednotlivých položek.")
             
             for i, item_text in enumerate(mr_q['items'], 1):
@@ -291,7 +292,7 @@ class SPSSSyntaxGenerator:
                 continue
             
             section.append(f"* {code} - {mr_q['text'][:80]}...")
-            section.append(f"* Používá odpovědi z {parent['code']}.")
+            section.append(f"* Používá odpovědi z {parent['code']}")
             
             # Použijeme položky z rodiče
             for i, item_text in enumerate(parent['items'], 1):
@@ -329,7 +330,7 @@ class SPSSSyntaxGenerator:
                 continue
             
             section.append(f"* {code} - {battery['text'][:80]}...")
-            section.append(f"* Položky jsou filtrovány z {parent['code']}.")
+            section.append(f"* Položky jsou filtrovány z {parent['code']}")
             
             for i, item_text in enumerate(parent['items'], 1):
                 var_name = f'Q{code}__{parent["code"]}_{i}'
@@ -360,7 +361,7 @@ class SPSSSyntaxGenerator:
                 continue
             
             section.append(f"* {code} - {battery['text'][:80]}...")
-            section.append(f"* Baterie multiple filtrovaná z {parent['code']}.")
+            section.append(f"* Baterie multiple filtrovaná z {parent['code']}")
             
             # Extrahujeme unique row identifiers
             rows = set()
@@ -485,14 +486,7 @@ import os
 import tempfile
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"],
-        "expose_headers": ["Content-Disposition"]  # Povolí JavaScript číst tento header
-    }
-})
+CORS(app)
 
 @app.route('/api/generate', methods=['POST'])
 def generate_syntax():
@@ -503,25 +497,6 @@ def generate_syntax():
         
         sav_file = request.files['sav_file']
         docx_file = request.files['docx_file']
-        
-        # Získáme název SAV souboru bez přípony
-        sav_filename = sav_file.filename
-        print(f"DEBUG: Original SAV filename: '{sav_filename}'")
-        
-        if sav_filename and sav_filename.lower().endswith('.sav'):
-            base_name = sav_filename[:-4]  # Odstraníme .sav
-        elif sav_filename:
-            base_name = sav_filename
-        else:
-            base_name = 'data'  # Fallback
-        
-        # Ošetříme problematické znaky
-        # Nahradíme mezery, české znaky zůstanou
-        base_name = base_name.replace(' ', '_')
-        
-        # Vytvoříme název pro výstupní soubor
-        output_filename = f'{base_name}_syntax.sps'
-        print(f"DEBUG: Output filename: '{output_filename}'")
         
         with tempfile.TemporaryDirectory() as tmpdir:
             sav_path = os.path.join(tmpdir, 'data.sav')
@@ -534,23 +509,12 @@ def generate_syntax():
             generator = SPSSSyntaxGenerator(sav_path, docx_path)
             generator.run(output_path)
             
-            # Použijeme send_file pro správné kódování, ale přidáme vlastní header
-            from flask import send_file as flask_send_file, make_response
-            
-            # Pošleme soubor
-            response = flask_send_file(
+            return send_file(
                 output_path,
                 mimetype='text/plain',
                 as_attachment=True,
-                download_name=output_filename
+                download_name='generated_syntax.sps'
             )
-            
-            # Explicitně přidáme Content-Disposition header (send_file to dělá taky, ale pro jistotu)
-            response.headers['Content-Disposition'] = f'attachment; filename="{output_filename}"'
-            
-            print(f"DEBUG: Sending file with Content-Disposition: attachment; filename=\"{output_filename}\"")
-            
-            return response
     
     except Exception as e:
         import traceback
@@ -560,7 +524,7 @@ def generate_syntax():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'version': '2.1-filename-fix'})
+    return jsonify({'status': 'ok', 'version': '2.0-upgraded'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
