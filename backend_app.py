@@ -498,6 +498,10 @@ def generate_syntax():
         sav_file = request.files['sav_file']
         docx_file = request.files['docx_file']
         
+        # Získat název SAV souboru bez přípony
+        sav_basename = os.path.splitext(sav_file.filename)[0]
+        output_filename = f'generated_syntax_{sav_basename}.sps'
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             sav_path = os.path.join(tmpdir, 'data.sav')
             docx_path = os.path.join(tmpdir, 'questionnaire.docx')
@@ -513,7 +517,7 @@ def generate_syntax():
                 output_path,
                 mimetype='text/plain',
                 as_attachment=True,
-                download_name='generated_syntax.sps'
+                download_name=output_filename
             )
     
     except Exception as e:
@@ -524,7 +528,7 @@ def generate_syntax():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'version': '2.0-upgraded'})
+    return jsonify({'status': 'ok', 'version': '2.0.3-complete'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
