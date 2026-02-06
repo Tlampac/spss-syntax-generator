@@ -461,7 +461,8 @@ class SPSSSyntaxGenerator:
         """Uloží vygenerovanou syntax do souboru"""
         syntax = self.generate_syntax()
         
-        with open(output_path, 'w', encoding='cp1250', newline='\r\n') as f:
+        # Použití UTF-8 s BOM pro kompatibilitu se SPSS i Linuxem
+        with open(output_path, 'w', encoding='utf-8-sig', newline='\r\n') as f:
             f.write(syntax)
         print(f"\n💾 Syntax uložena do: {output_path}")
     
@@ -492,11 +493,17 @@ CORS(app)
 def generate_syntax():
     """API endpoint pro generování syntax"""
     try:
+        print("📥 Přijat požadavek na generování syntax")
+        
         if 'sav_file' not in request.files or 'docx_file' not in request.files:
+            print("❌ Chybí soubory v požadavku")
             return jsonify({'error': 'Chybí soubory'}), 400
         
         sav_file = request.files['sav_file']
         docx_file = request.files['docx_file']
+        
+        print(f"✓ SAV soubor: {sav_file.filename}")
+        print(f"✓ DOCX soubor: {docx_file.filename}")
         
         # Získat název SAV souboru bez přípony
         sav_basename = os.path.splitext(sav_file.filename)[0]
@@ -507,12 +514,15 @@ def generate_syntax():
             docx_path = os.path.join(tmpdir, 'questionnaire.docx')
             output_path = os.path.join(tmpdir, 'syntax.sps')
             
+            print("💾 Ukládám soubory...")
             sav_file.save(sav_path)
             docx_file.save(docx_path)
             
+            print("🔧 Generuji syntax...")
             generator = SPSSSyntaxGenerator(sav_path, docx_path)
             generator.run(output_path)
             
+            print(f"✅ Odesílám soubor: {output_filename}")
             return send_file(
                 output_path,
                 mimetype='text/plain',
@@ -523,12 +533,12 @@ def generate_syntax():
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
-        print(f"ERROR: {error_detail}")
+        print(f"❌ ERROR: {error_detail}")
         return jsonify({'error': str(e), 'detail': error_detail}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'version': '2.0.3-complete'})
+    return jsonify({'status': 'ok', 'version': '2.0.4-fixed'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
