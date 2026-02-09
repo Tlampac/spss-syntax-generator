@@ -495,7 +495,8 @@ CORS(app, resources={
             "https://syntaxgenerator.netlify.app",
             "http://localhost:8000",  # pro lokální testování
             "http://127.0.0.1:8000"
-        ]
+        ],
+        "expose_headers": ["Content-Disposition"]  # Povolit čtení tohoto headeru z JavaScriptu
     }
 })
 
@@ -548,7 +549,7 @@ def generate_syntax():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'version': '2.0.5-production-ready'})
+    return jsonify({'status': 'ok', 'version': '2.0.6-cors-headers-fix'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
